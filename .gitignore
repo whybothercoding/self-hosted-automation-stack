@@ -9,3 +9,6 @@ backups/
 
 # macOS
 .DS_Store
+
+# Internal planning files
+docs/superpowers/
