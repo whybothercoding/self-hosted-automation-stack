@@ -1,0 +1,14 @@
+services:
+  n8n:
+    ports:
+      - "5678:5678"
+    environment:
+      WEBHOOK_URL: http://localhost:5678
+
+  baserow:
+    ports:
+      - "8080:80"
+
+  caddy:
+    profiles:
+      - production
