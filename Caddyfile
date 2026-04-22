@@ -1,0 +1,27 @@
+{
+	email {$LETSENCRYPT_EMAIL}
+}
+
+{$N8N_SUBDOMAIN}.{$DOMAIN} {
+	encode gzip
+
+	header {
+		X-Frame-Options SAMEORIGIN
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	reverse_proxy n8n:5678
+}
+
+{$BASEROW_SUBDOMAIN}.{$DOMAIN} {
+	encode gzip
+
+	header {
+		X-Frame-Options SAMEORIGIN
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	reverse_proxy baserow:80
+}
