@@ -1,0 +1,11 @@
+# Environment — never commit secrets
+.env
+
+# Backups — can be large
+backups/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
