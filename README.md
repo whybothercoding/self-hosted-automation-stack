@@ -23,12 +23,58 @@ A production-ready Docker Compose setup for running **n8n**, **Baserow**, and **
 ## Quick Start
 
 ```bash
-git clone https://github.com/theoslasha/self-hosted-automation-stack.git
+git clone https://github.com/whybothercoding/self-hosted-automation-stack.git
 cd self-hosted-automation-stack
 bash scripts/setup.sh
 ```
 
-The setup script configures your `.env`, pulls images, and starts the stack. Caddy automatically issues Let's Encrypt certificates for both subdomains.
+The setup script prompts for your domain, email, and passwords, writes `.env`, pulls images, and starts the stack. Caddy automatically issues Let's Encrypt certificates for both subdomains.
+
+## Usage
+
+### First Run
+
+Once the stack is up, open your browser:
+
+- **n8n:** `https://n8n.yourdomain.com` — create your admin account, then start building workflows
+- **Baserow:** `https://baserow.yourdomain.com` — create your admin account, then create databases and tables
+
+SSL certificates are issued automatically within 1–2 minutes of first start. If a browser shows a certificate warning, wait a moment and refresh.
+
+### Daily Management
+
+```bash
+# View running services
+docker compose ps
+
+# Follow logs for a specific service
+docker compose logs n8n --follow
+
+# Stop the stack
+docker compose stop
+
+# Start the stack
+docker compose start
+
+# Restart a single service
+docker compose restart n8n
+```
+
+### Backup
+
+```bash
+bash scripts/backup.sh
+```
+
+Stops the stack, snapshots all volumes to `./backups/`, and restarts. See [Backup & Restore](docs/backup-and-restore.md) for restore instructions and cron automation.
+
+### Update
+
+```bash
+bash scripts/update.sh
+```
+
+Pulls latest images and redeploys. Always run a backup first.
 
 ## Environment Variables
 
