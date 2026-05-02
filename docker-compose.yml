@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - automation-network
+      - backend-network
 
   n8n:
     image: n8nio/n8n:latest
@@ -38,8 +38,15 @@ services:
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
     volumes:
       - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
-      - automation-network
+      - proxy-network
+      - backend-network
 
   baserow:
     image: baserow/baserow:latest
@@ -53,7 +60,8 @@ services:
     volumes:
       - baserow_data:/baserow/data
     networks:
-      - automation-network
+      - proxy-network
+      - backend-network
 
   caddy:
     image: caddy:2-alpine
@@ -71,7 +79,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - automation-network
+      - proxy-network
 
 volumes:
   postgres_data:
@@ -81,5 +89,7 @@ volumes:
   caddy_config:
 
 networks:
-  automation-network:
+  proxy-network:
+    driver: bridge
+  backend-network:
     driver: bridge
