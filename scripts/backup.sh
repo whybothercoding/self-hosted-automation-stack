@@ -19,7 +19,15 @@ mkdir -p "$BACKUP_DIR"
 
 cd "$PROJECT_DIR"
 
-echo "[$TIMESTAMP] Starting backup..."
+# Detect the compose project name (derived from directory name by Docker Compose)
+COMPOSE_PROJECT=$(docker compose config 2>/dev/null | grep -m1 '^name:' | awk '{print $2}')
+if [ -z "$COMPOSE_PROJECT" ]; then
+  echo "ERROR: Could not determine compose project name."
+  echo "Make sure .env exists and docker compose config runs without errors."
+  exit 1
+fi
+
+echo "[$TIMESTAMP] Starting backup (project: $COMPOSE_PROJECT)..."
 
 echo "Stopping containers gracefully..."
 docker compose stop
@@ -35,13 +43,13 @@ backup_volume() {
     tar czf "/backup/$(basename "$ARCHIVE")" -C /data .
 }
 
-backup_volume "self-hosted-automation-stack_n8n_data"
-backup_volume "self-hosted-automation-stack_baserow_data"
-backup_volume "self-hosted-automation-stack_postgres_data"
+backup_volume "${COMPOSE_PROJECT}_n8n_data"
+backup_volume "${COMPOSE_PROJECT}_baserow_data"
+backup_volume "${COMPOSE_PROJECT}_postgres_data"
 
 echo "Restarting containers..."
 docker compose start
 
 echo ""
 echo "Backup complete. Files saved to: $BACKUP_DIR"
-ls -lh "$BACKUP_DIR" | grep "$TIMESTAMP"
+find "$BACKUP_DIR" -name "*${TIMESTAMP}*" -exec ls -lh {} \;
