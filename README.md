@@ -1,8 +1,29 @@
 # Self-Hosted Automation Stack
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Validate](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/validate.yml/badge.svg)](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/validate.yml)
 
-A production-ready Docker Compose setup for running **n8n**, **Baserow**, and **PostgreSQL** behind **Caddy** with automatic HTTPS on any VPS. Clone, configure, and have your self-hosted automation suite online in minutes — no manual SSL certificate management required.
+A production-ready Docker Compose stack running **n8n**, **Baserow**, and **PostgreSQL** behind **Caddy** with automatic HTTPS. Clone, configure, and deploy a self-hosted automation suite on any VPS in minutes — no manual SSL certificate management, no external dependencies.
+
+## Architecture
+
+```
+                 ┌──────────────────────────────────────────────────┐
+                 │                VPS (Docker host)                  │
+                 │                                                  │
+  Internet       │  ┌─────────┐        proxy-network               │
+ ──:80/:443 ────►│  │  Caddy  │──► n8n (:5678)                     │
+                 │  │  (TLS)  │└──► Baserow (:80)                   │
+                 │  └─────────┘         │          │                │
+                 │                      │          │ backend-network │
+                 │                      ▼          ▼                │
+                 │                   ┌──────────────────┐           │
+                 │                   │    PostgreSQL     │           │
+                 │                   └──────────────────┘           │
+                 └──────────────────────────────────────────────────┘
+```
+
+Caddy terminates TLS and proxies to n8n and Baserow over `proxy-network`. Neither Caddy nor the internet can reach PostgreSQL directly — it is only reachable from n8n and Baserow via `backend-network`.
 
 ## Services
 
@@ -39,31 +60,31 @@ Once the stack is up, open your browser:
 - **n8n:** `https://n8n.yourdomain.com` — create your admin account, then start building workflows
 - **Baserow:** `https://baserow.yourdomain.com` — create your admin account, then create databases and tables
 
-SSL certificates are issued automatically within 1–2 minutes of first start. If a browser shows a certificate warning, wait a moment and refresh.
+SSL certificates are issued within 1–2 minutes of first start. If your browser shows a certificate warning, wait a moment and refresh.
 
 ### Daily Management
 
 ```bash
-# View running services
+make up         # Start the stack
+make down       # Stop and remove containers
+make restart    # Restart all services
+make logs       # Follow logs for all services
+make dev        # Start in dev mode (direct ports, no Caddy)
+```
+
+Or with Docker Compose directly:
+
+```bash
 docker compose ps
-
-# Follow logs for a specific service
 docker compose logs n8n --follow
-
-# Stop the stack
-docker compose stop
-
-# Start the stack
-docker compose start
-
-# Restart a single service
 docker compose restart n8n
 ```
 
 ### Backup
 
 ```bash
-bash scripts/backup.sh
+make backup
+# or: bash scripts/backup.sh
 ```
 
 Stops the stack, snapshots all volumes to `./backups/`, and restarts. See [Backup & Restore](docs/backup-and-restore.md) for restore instructions and cron automation.
@@ -71,10 +92,23 @@ Stops the stack, snapshots all volumes to `./backups/`, and restarts. See [Backu
 ### Update
 
 ```bash
-bash scripts/update.sh
+make update
+# or: bash scripts/update.sh
 ```
 
 Pulls latest images and redeploys. Always run a backup first.
+
+## Development Mode
+
+Run locally without Caddy — services are exposed on direct ports:
+
+```bash
+make dev
+# or: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+- n8n: [http://localhost:5678](http://localhost:5678)
+- Baserow: [http://localhost:8080](http://localhost:8080)
 
 ## Environment Variables
 
@@ -108,17 +142,6 @@ All variables are documented with comments in [`.env.example`](.env.example).
 | `scripts/setup.sh`   | Interactive first-run: writes `.env`, pulls images, starts stack     |
 | `scripts/backup.sh`  | Stops stack, snapshots all volumes to `backups/`, restarts stack     |
 | `scripts/update.sh`  | Pulls latest images, redeploys with `--remove-orphans`, prunes old   |
-
-## Development Mode
-
-Run locally without Caddy — services exposed on direct ports:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-```
-
-- n8n: [http://localhost:5678](http://localhost:5678)
-- Baserow: [http://localhost:8080](http://localhost:8080)
 
 ## Documentation
 
