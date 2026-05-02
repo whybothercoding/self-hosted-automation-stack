@@ -46,12 +46,13 @@ make restart  # docker compose restart
 ## Architecture
 
 ```
-Internet → Caddy (80/443)
-              ├── n8n.{DOMAIN}     → n8n:5678
-              └── baserow.{DOMAIN} → baserow:80
-
-n8n    ──┐
-baserow ──┤──→ postgres (shared DB backend, internal only)
+Internet → Caddy (80/443) ──proxy-network──► n8n (5678)
+                                         └──► Baserow (80)
+                                                │      │
+                                         backend-network
+                                                │      │
+                                                ▼      ▼
+                                            PostgreSQL (5432)
 ```
 
 - **`docker-compose.yml`** — production definition; Caddy is the only public-facing service
