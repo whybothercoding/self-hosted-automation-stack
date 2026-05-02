@@ -1,0 +1,27 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy env template
+        run: cp .env.example .env
+
+      - name: Validate production compose
+        run: docker compose config --quiet
+
+      - name: Validate dev compose override
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+
+      - name: Lint shell scripts
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh
