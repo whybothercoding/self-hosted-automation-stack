@@ -4,6 +4,9 @@
 # Backups — can be large
 backups/
 
+# Custom TLS certificates (see docs/ssl-configuration.md)
+certs/
+
 # Logs
 *.log
 
