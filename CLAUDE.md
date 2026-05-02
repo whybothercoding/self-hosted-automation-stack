@@ -19,7 +19,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 docker compose ps
 docker compose logs <service> --follow   # services: n8n, baserow, postgres, caddy
 docker compose restart <service>
-docker compose stop / start
+docker compose stop
+docker compose start
 
 # Backup (stops stack → snapshots volumes → restarts)
 bash scripts/backup.sh
@@ -57,7 +58,23 @@ Internet → Caddy (80/443) ──proxy-network──► n8n (5678)
 
 - **`docker-compose.yml`** — production definition; Caddy is the only public-facing service
 - **`docker-compose.dev.yml`** — override that ports n8n and Baserow directly and puts Caddy behind a `production` profile (so it doesn't start)
-- **`Caddyfile`** — reads domain/subdomain from env vars at runtime via `{$VAR}` syntax; adds security headers; gzip on both virtual hosts
+- **`Caddyfile`** — reads domain/subdomain from env vars at runtime via `{$VAR}` syntax; security headers include HSTS (`max-age=31536000; includeSubDomains`), X-Frame-Options, X-Content-Type-Options, Referrer-Policy; gzip on both virtual hosts
+- **`.github/workflows/validate.yml`** — CI runs on every push to main and every PR: validates both compose files and shellchecks all scripts in `scripts/`
+
+## Validation
+
+Before committing changes to compose files or scripts, run these locally (mirrors the CI checks):
+
+```bash
+# Validate compose syntax (requires .env to exist)
+cp .env.example .env
+docker compose config --quiet
+docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+rm .env
+
+# Lint shell scripts
+shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh
+```
 
 ## Critical Constraints
 
