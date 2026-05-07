@@ -8,40 +8,25 @@ A Docker Compose stack that runs **n8n + Baserow + PostgreSQL + Caddy** on a sin
 
 ## Commands
 
-```bash
-# First-time setup (interactive — writes .env, pulls images, starts stack)
-bash scripts/setup.sh
-
-# Dev mode — no Caddy, services on direct ports (n8n :5678, Baserow :8080)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-# Production management
-docker compose ps
-docker compose logs <service> --follow   # services: n8n, baserow, postgres, caddy
-docker compose restart <service>
-docker compose stop
-docker compose start
-
-# Backup (stops stack → snapshots volumes → restarts)
-bash scripts/backup.sh
-
-# Update (pulls latest images, redeploys, prunes old images)
-bash scripts/update.sh
-```
-
-## Makefile Shortcuts
-
-The Makefile wraps all common operations. Prefer `make <target>` over remembering raw commands:
+Prefer `make <target>` — it wraps all common operations:
 
 ```bash
-make setup    # first-run interactive setup
+make setup    # first-run interactive setup (writes .env, pulls images, starts stack)
 make up       # docker compose up -d
 make down     # docker compose down
-make dev      # dev mode with direct ports, no Caddy
+make dev      # dev mode: direct ports (n8n :5678, Baserow :8080), no Caddy
 make logs     # docker compose logs -f
-make backup   # bash scripts/backup.sh
-make update   # bash scripts/update.sh
+make backup   # stops stack → snapshots volumes → restarts
+make update   # pulls latest images, redeploys, prunes old images
 make restart  # docker compose restart
+```
+
+Raw equivalents when needed:
+
+```bash
+docker compose ps
+docker compose logs <service> --follow   # services: n8n, baserow, postgres, caddy
+docker compose stop / start
 ```
 
 ## Architecture
@@ -82,6 +67,9 @@ shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh
 - `BASEROW_SECRET_KEY` — Django secret key; same rule applies.
 - Both databases (`N8N_DB_NAME`, `BASEROW_DB_NAME`) are created automatically by each app on first run inside the shared Postgres container. The `POSTGRES_DB` var is just the default DB created at container init and isn't used by n8n or Baserow directly.
 - Volume names in `backup.sh` are detected dynamically via `docker compose config` — no hardcoded prefix. The script requires `.env` to exist so compose config can resolve variable substitutions.
+- `backup.sh` backs up `n8n_data`, `baserow_data`, and `postgres_data` only. `caddy_data` and `caddy_config` are intentionally excluded — certificates are re-issuable from Let's Encrypt for free.
+- n8n and Baserow start only after Postgres passes its healthcheck (`pg_isready`). If either service fails to start, confirm Postgres is `(healthy)` first: `docker compose ps postgres`.
+- `setup.sh` uses a `sed_inplace()` helper (macOS vs Linux `sed -i` differences). Any additions to that script that write to `.env` must use the same helper.
 
 ## Docs
 
