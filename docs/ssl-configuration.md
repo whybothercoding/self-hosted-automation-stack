@@ -117,6 +117,7 @@ n8n.example.com {
     tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
 
     header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Frame-Options SAMEORIGIN
         X-Content-Type-Options nosniff
         Referrer-Policy strict-origin-when-cross-origin

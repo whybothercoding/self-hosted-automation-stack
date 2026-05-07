@@ -75,7 +75,7 @@ docker compose version
 ## 4. Clone the Repository
 
 ```bash
-git clone https://github.com/theoslasha/self-hosted-automation-stack.git
+git clone https://github.com/whybothercoding/self-hosted-automation-stack.git
 cd self-hosted-automation-stack
 ```
 

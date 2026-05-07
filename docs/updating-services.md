@@ -79,7 +79,8 @@ docker compose exec postgres pg_dumpall -U $POSTGRES_USER > all_databases_$(date
 docker compose down
 
 # 3. Remove the old volume (data exported above)
-docker volume rm self-hosted-automation-stack_postgres_data
+PROJ=$(docker compose config | grep -m1 '^name:' | awk '{print $2}')
+docker volume rm ${PROJ}_postgres_data
 
 # 4. Update docker-compose.yml to the new major version
 #    e.g. postgres:15-alpine → postgres:16-alpine
