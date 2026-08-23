@@ -47,6 +47,7 @@ Internet → Caddy (80/443) ──proxy-network──► n8n (5678)
 
 - **`docker-compose.yml`** — production definition; Caddy is the only public-facing service
 - **`docker-compose.dev.yml`** — override that ports n8n and Baserow directly and puts Caddy behind a `production` profile (so it doesn't start)
+- **`postgres-init/init-app-databases.sh`** — mounted into Postgres's `docker-entrypoint-initdb.d/`; creates the `n8n` and `baserow` databases on first init of an empty volume. See the Critical Constraints note below — this doesn't run again against an already-initialized volume.
 - **`Caddyfile`** — reads domain/subdomain from env vars at runtime via `{$VAR}` syntax; security headers include HSTS (`max-age=31536000; includeSubDomains`), X-Frame-Options, X-Content-Type-Options, Referrer-Policy; gzip on both virtual hosts
 - **`.github/workflows/validate.yml`** — CI runs on every push to main and every PR: validates both compose files, shellchecks all scripts in `scripts/`, then actually boots the dev stack (`--wait`) and curls both health endpoints externally — this is real runtime verification, not just YAML syntax checking
 - **`.github/workflows/security.yml`** — weekly + on-push Trivy CVE scan of the four pinned images (not the compose file — Trivy has no native docker-compose misconfig scanner), results land in the repo's Security tab. Non-blocking (`continue-on-error`).
@@ -78,7 +79,7 @@ To actually verify the stack boots (not just that the YAML is valid), run `make 
 
 - `N8N_ENCRYPTION_KEY` — generated once by `setup.sh` via `openssl rand -hex 32`. **Never change it after first run**; doing so breaks all stored n8n credentials.
 - `BASEROW_SECRET_KEY` — Django secret key; same rule applies.
-- Both databases (`N8N_DB_NAME`, `BASEROW_DB_NAME`) are created automatically by each app on first run inside the shared Postgres container. The `POSTGRES_DB` var is just the default DB created at container init and isn't used by n8n or Baserow directly.
+- `POSTGRES_DB` is just the default DB created at container init and isn't used by n8n or Baserow directly. **Neither app creates its own database on connect** (discovered via the smoke-test job actually booting the stack, 2026-08-23 — the repo had never been booted for real before that). `postgres-init/init-app-databases.sh` creates `N8N_DB_NAME` and `BASEROW_DB_NAME` explicitly via Postgres's `docker-entrypoint-initdb.d` mechanism, which only runs once, against an empty `postgres_data` volume. An existing volume from before this fix needs the databases created manually — see `docs/troubleshooting.md` § Can't Connect to PostgreSQL.
 - Volume names in `backup.sh` are detected dynamically via `docker compose config` — no hardcoded prefix. The script requires `.env` to exist so compose config can resolve variable substitutions.
 - `backup.sh` backs up `n8n_data`, `baserow_data`, and `postgres_data` only. `caddy_data` and `caddy_config` are intentionally excluded — certificates are re-issuable from Let's Encrypt for free.
 - n8n and Baserow start only after Postgres passes its healthcheck (`pg_isready`). If either service fails to start, confirm Postgres is `(healthy)` first: `docker compose ps postgres`.

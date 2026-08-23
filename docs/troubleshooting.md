@@ -74,14 +74,23 @@ docker compose exec postgres psql -U $POSTGRES_USER -c "ALTER USER $POSTGRES_USE
 
 Then update `.env` to match and restart: `docker compose restart n8n baserow`
 
-**Check 3: Database doesn't exist yet**
+**Check 3: Database doesn't exist**
 
-n8n and Baserow create their own databases on first startup. If they crash before the DB is created, restart them after PostgreSQL is healthy:
+`postgres-init/init-app-databases.sh` creates the `n8n` and `baserow` databases automatically — but **only** the first time Postgres initializes against an empty `postgres_data` volume. Neither app creates its own database on connect; if the database is missing, n8n/Baserow will keep crash-looping with `database "..." does not exist` no matter how many times you restart them.
+
+This happens if:
+- You're restoring/upgrading an existing volume that was created before this init script existed.
+- The volume was manually created without ever running Postgres's first-init sequence against it.
+
+Fix — create the missing database directly:
 
 ```bash
-docker compose restart n8n
-docker compose restart baserow
+docker compose exec postgres psql -U $POSTGRES_USER -c "CREATE DATABASE n8n;"
+docker compose exec postgres psql -U $POSTGRES_USER -c "CREATE DATABASE baserow;"
+docker compose restart n8n baserow
 ```
+
+(Substitute your actual `N8N_DB_NAME`/`BASEROW_DB_NAME` if you changed them from the defaults.)
 
 ---
 

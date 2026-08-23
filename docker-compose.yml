@@ -6,8 +6,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      # Read by postgres-init/init-app-databases.sh — POSTGRES_DB only gets
+      # one database created for free; n8n and Baserow need their own.
+      N8N_DB_NAME: ${N8N_DB_NAME}
+      BASEROW_DB_NAME: ${BASEROW_DB_NAME}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init/init-app-databases.sh:/docker-entrypoint-initdb.d/init-app-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
