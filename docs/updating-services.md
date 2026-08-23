@@ -22,22 +22,18 @@ bash scripts/backup.sh
 bash scripts/update.sh
 ```
 
-## Pinning to Specific Versions
+## Version Pins and Dependabot
 
-By default, `docker-compose.yml` uses `:latest` tags. For production stability, pin to specific versions to control exactly when updates happen.
+`docker-compose.yml` pins all four images to specific versions rather than `:latest` — an update is a deliberate, reviewable change, not something that silently happens on the next `docker compose pull`.
 
-Edit `docker-compose.yml`:
+[Dependabot](../.github/dependabot.yml) watches those pinned tags (`package-ecosystem: docker`, GA support for `docker-compose.yml` since Feb 2025) and opens a PR whenever n8n, Baserow, Postgres, or Caddy cut a new release. **Review the linked changelog before merging** — Dependabot bumps the tag, it doesn't read the release notes for you. For n8n specifically, check the breaking-changes guidance below before merging a major-version bump.
+
+To bump a version by hand instead of waiting for Dependabot, edit the `image:` line for that service in `docker-compose.yml` directly:
 
 ```yaml
 services:
   n8n:
-    image: n8nio/n8n:1.89.1
-
-  baserow:
-    image: baserow/baserow:1.32.5
-
-  postgres:
-    image: postgres:15.7-alpine
+    image: n8nio/n8n:2.36.0   # example — check the current release first
 ```
 
 Check available versions:
@@ -45,7 +41,7 @@ Check available versions:
 - **Baserow:** https://hub.docker.com/r/baserow/baserow/tags
 - **PostgreSQL:** https://hub.docker.com/_/postgres/tags
 
-After editing, apply:
+After editing (or merging a Dependabot PR), apply:
 
 ```bash
 docker compose pull
