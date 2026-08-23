@@ -104,10 +104,16 @@ services:
       - baserow_data:/baserow/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/api/_health/"]
-      interval: 30s
+      # First boot on an empty volume runs Django migrations *and* Baserow's
+      # built-in template sync (importing dozens of bundled templates via a
+      # background worker) before the health endpoint reliably responds —
+      # observed taking ~150s on a GitHub Actions runner. start_period +
+      # retries*interval must comfortably exceed that or docker compose
+      # up --wait marks the container unhealthy mid-migration.
+      interval: 15s
       timeout: 10s
-      retries: 5
-      start_period: 45s
+      retries: 10
+      start_period: 150s
     security_opt:
       - no-new-privileges:true
     # No cap_drop here yet: Baserow's all-in-one image runs nginx +

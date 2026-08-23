@@ -45,7 +45,7 @@ update:
 	bash scripts/update.sh
 
 test:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait --wait-timeout 180
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait --wait-timeout 320
 	curl -sf http://localhost:5678/healthz && echo "n8n: healthy"
 	curl -sf http://localhost:8080/api/_health/ && echo "baserow: healthy"
 

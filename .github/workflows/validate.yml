@@ -44,7 +44,7 @@ jobs:
           sed -i "s|^BASEROW_SECRET_KEY=.*|BASEROW_SECRET_KEY=$(openssl rand -hex 32)|" .env
 
       - name: Boot dev stack and wait for healthchecks
-        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait --wait-timeout 180
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait --wait-timeout 320
 
       - name: Check n8n health endpoint (external, through the mapped port)
         run: curl -sf http://localhost:5678/healthz

@@ -33,7 +33,7 @@ jobs:
           sed -i "s|^BASEROW_SECRET_KEY=.*|BASEROW_SECRET_KEY=$(openssl rand -hex 32)|" .env
 
       - name: Boot the stack
-        run: docker compose up -d --wait --wait-timeout 180
+        run: docker compose up -d --wait --wait-timeout 320
 
       - name: Run the backup/restore drill
         run: bash scripts/backup-drill.sh
