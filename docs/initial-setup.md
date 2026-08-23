@@ -6,7 +6,7 @@ This guide walks you through deploying the stack on a fresh Ubuntu VPS from scra
 
 You need a VPS with:
 - Ubuntu 20.04 LTS or later
-- At least 2 GB RAM (4 GB recommended for running both n8n and Baserow)
+- At least 4 GB RAM. `docker-compose.yml`'s per-service memory limits (postgres 512m, n8n 1g, baserow 2g, caddy 128m) sum to ~3.6 GB at worst case — Baserow alone needs the full 2g during its first-boot migration + template sync, observed OOM-killing a celery worker under 1g. 2 GB will work for steady-state use once past first boot, but risks an OOM on the very first `docker compose up`.
 - Ports 80 and 443 open in the firewall
 
 ### Open Firewall Ports (UFW)

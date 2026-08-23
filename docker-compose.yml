@@ -123,10 +123,16 @@ services:
     # gunicorn/daphne + celery via an internal process supervisor whose root
     # requirements aren't confirmed. Drop capabilities in a follow-up pass
     # once this base hardening is proven in CI, not blindly in this one.
+    # 2g, not 1g: Baserow runs gunicorn + celery worker + celery beat
+    # concurrently, and first boot on an empty volume adds Django migrations
+    # + template-sync on top of that. Observed a celery worker getting
+    # OOM-killed (SIGKILL) under a 1g cap during exactly this burst on a
+    # GitHub Actions runner — steady-state usage is lower, but the limit has
+    # to cover the worst moment, not the average one.
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 2g
     logging:
       driver: json-file
       options:
