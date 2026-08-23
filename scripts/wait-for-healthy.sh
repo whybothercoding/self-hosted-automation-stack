@@ -15,6 +15,13 @@ set -e
 # bookkeeping entirely — what matters is "does the service respond right
 # now", not "what does Docker's internal state say".
 #
+# Baserow's check execs `wget` directly (no `sh -c` wrapper), matching how
+# docker-compose.yml's own `["CMD", "wget", ...]` array-form healthcheck
+# resolves it. Confirmed via `sh -c 'wget ...'` failing with
+# "wget: not found" while the CMD-array form (no shell involved) succeeds —
+# whatever sets Baserow's PATH for its main process apparently isn't applied
+# to an ad-hoc `docker exec ... sh` session.
+#
 # Usage: ./scripts/wait-for-healthy.sh <service> [<service> ...]
 # Known services: postgres, n8n, baserow
 # Env:   WAIT_ATTEMPTS (default 40), WAIT_INTERVAL_SECS (default 10)
@@ -23,26 +30,25 @@ set -e
 ATTEMPTS="${WAIT_ATTEMPTS:-40}"
 INTERVAL="${WAIT_INTERVAL_SECS:-10}"
 
-check_cmd() {
+run_check() {
   case "$1" in
-    postgres) echo 'pg_isready -U "$POSTGRES_USER"' ;;
-    n8n)      echo 'wget -qO- http://localhost:5678/healthz' ;;
-    baserow)  echo 'wget -qO- http://localhost/api/_health/' ;;
+    postgres) docker compose exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER"' ;;
+    n8n)      docker compose exec -T n8n sh -c 'wget -qO- http://localhost:5678/healthz' ;;
+    baserow)  docker compose exec -T baserow wget -qO- http://localhost/api/_health/ ;;
     *)
       echo "Unknown service: $1 (known: postgres, n8n, baserow)" >&2
-      exit 1
+      return 2
       ;;
   esac
 }
 
 for service in "$@"; do
-  cmd=$(check_cmd "$service")
   echo "Waiting for $service (up to $((ATTEMPTS * INTERVAL))s)..."
   ok=""
   for i in $(seq 1 "$ATTEMPTS"); do
     # if/else around the assignment (not `out=$(...) ; rc=$?`) so a nonzero
     # exit from the exec doesn't trip `set -e` on the assignment itself.
-    if out=$(docker compose exec -T "$service" sh -c "$cmd" 2>&1); then
+    if out=$(run_check "$service" 2>&1); then
       rc=0
     else
       rc=$?
