@@ -2,47 +2,57 @@
 set -e
 
 # -------------------------------------------------------
-# wait-for-healthy.sh — Poll docker compose services until Docker reports
-# them healthy.
+# wait-for-healthy.sh — Poll a service's own healthcheck command via
+# `docker compose exec` until it succeeds.
 #
-# Deliberately NOT `docker compose up --wait`: that command fails
-# permanently on the first "unhealthy" transition, even if the container
-# recovers a few seconds later. Observed happening to Baserow in CI —
-# its first-boot migration + template sync left it briefly unhealthy under
-# runner resource contention, then it started responding 200 on every
-# subsequent check, but `--wait` had already given up. This script tolerates
-# that and only fails on a genuine timeout with nothing ever reporting
-# healthy.
+# Deliberately does NOT rely on `docker compose up --wait` or `docker
+# inspect .State.Health.Status`: both depend on Docker's own HEALTHCHECK
+# state machine, which was observed getting stuck reporting "unhealthy" for
+# Baserow even while its /api/_health/ endpoint was returning 200 on every
+# single check for minutes straight, under GitHub Actions runner resource
+# contention during first-boot migrations. Running the exact same check
+# command directly and retrying until IT succeeds sidesteps Docker's health
+# bookkeeping entirely — what matters is "does the service respond right
+# now", not "what does Docker's internal state say".
 #
 # Usage: ./scripts/wait-for-healthy.sh <service> [<service> ...]
-# Env:   WAIT_ATTEMPTS (default 20), WAIT_INTERVAL_SECS (default 20)
+# Known services: postgres, n8n, baserow
+# Env:   WAIT_ATTEMPTS (default 40), WAIT_INTERVAL_SECS (default 10)
 # -------------------------------------------------------
 
-ATTEMPTS="${WAIT_ATTEMPTS:-20}"
-INTERVAL="${WAIT_INTERVAL_SECS:-20}"
+ATTEMPTS="${WAIT_ATTEMPTS:-40}"
+INTERVAL="${WAIT_INTERVAL_SECS:-10}"
+
+check_cmd() {
+  case "$1" in
+    postgres) echo 'pg_isready -U "$POSTGRES_USER"' ;;
+    n8n)      echo 'wget -qO- http://localhost:5678/healthz' ;;
+    baserow)  echo 'wget -qO- http://localhost/api/_health/' ;;
+    *)
+      echo "Unknown service: $1 (known: postgres, n8n, baserow)" >&2
+      exit 1
+      ;;
+  esac
+}
 
 for service in "$@"; do
-  echo "Waiting for $service to become healthy (up to $((ATTEMPTS * INTERVAL))s)..."
-  healthy=""
+  cmd=$(check_cmd "$service")
+  echo "Waiting for $service (up to $((ATTEMPTS * INTERVAL))s)..."
+  ok=""
   for i in $(seq 1 "$ATTEMPTS"); do
-    cid=$(docker compose ps -q "$service")
-    status="no container"
-    if [ -n "$cid" ]; then
-      status=$(docker inspect --format='{{.State.Health.Status}}' "$cid" 2>/dev/null || echo "none")
-    fi
-    if [ "$status" = "healthy" ]; then
-      echo "  $service is healthy"
-      healthy="yes"
+    if docker compose exec -T "$service" sh -c "$cmd" >/dev/null 2>&1; then
+      echo "  $service is responding"
+      ok="yes"
       break
     fi
-    echo "  [$i/$ATTEMPTS] $service: $status"
+    echo "  [$i/$ATTEMPTS] $service not ready yet"
     sleep "$INTERVAL"
   done
-  if [ -z "$healthy" ]; then
-    echo "ERROR: $service did not become healthy within $((ATTEMPTS * INTERVAL))s"
+  if [ -z "$ok" ]; then
+    echo "ERROR: $service did not respond within $((ATTEMPTS * INTERVAL))s"
     docker compose logs "$service" --tail=100
     exit 1
   fi
 done
 
-echo "All services healthy: $*"
+echo "All services responding: $*"

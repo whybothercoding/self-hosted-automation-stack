@@ -104,12 +104,15 @@ services:
       - baserow_data:/baserow/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/api/_health/"]
-      # First boot on an empty volume runs Django migrations *and* Baserow's
-      # built-in template sync (importing dozens of bundled templates via a
-      # background worker) before the health endpoint reliably responds —
-      # observed taking ~150s on a GitHub Actions runner. start_period +
-      # retries*interval must comfortably exceed that or docker compose
-      # up --wait marks the container unhealthy mid-migration.
+      # For docker compose ps / operator visibility only — CI's actual
+      # readiness gate is scripts/wait-for-healthy.sh, which polls this same
+      # check directly rather than trusting Docker's own Health.Status. That
+      # status was observed getting stuck on "unhealthy" under CI resource
+      # contention even while every request to this endpoint was returning
+      # 200, so it's deliberately not load-bearing for anything anymore.
+      # First boot on an empty volume runs Django migrations *and*
+      # Baserow's built-in template sync before this responds reliably —
+      # observed taking 150s+ on a GitHub Actions runner.
       interval: 15s
       timeout: 10s
       retries: 10
