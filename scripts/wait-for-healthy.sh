@@ -40,12 +40,21 @@ for service in "$@"; do
   echo "Waiting for $service (up to $((ATTEMPTS * INTERVAL))s)..."
   ok=""
   for i in $(seq 1 "$ATTEMPTS"); do
-    if docker compose exec -T "$service" sh -c "$cmd" >/dev/null 2>&1; then
+    # if/else around the assignment (not `out=$(...) ; rc=$?`) so a nonzero
+    # exit from the exec doesn't trip `set -e` on the assignment itself.
+    if out=$(docker compose exec -T "$service" sh -c "$cmd" 2>&1); then
+      rc=0
+    else
+      rc=$?
+    fi
+    if [ "$rc" -eq 0 ]; then
       echo "  $service is responding"
       ok="yes"
       break
     fi
-    echo "  [$i/$ATTEMPTS] $service not ready yet"
+    # Print what actually failed — swallowing this is exactly what turned
+    # earlier failures into multiple rounds of guessing instead of one.
+    echo "  [$i/$ATTEMPTS] $service not ready (exec exit $rc): $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-300)"
     sleep "$INTERVAL"
   done
   if [ -z "$ok" ]; then
