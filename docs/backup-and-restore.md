@@ -67,6 +67,19 @@ For weekly backups (Sundays at 2 AM):
 
 ## Restoring from a Backup
 
+The fastest path is `scripts/restore.sh`, which wraps the manual steps below:
+
+```bash
+bash scripts/restore.sh 20260422_140000
+# or: make restore TIMESTAMP=20260422_140000
+```
+
+It detects the Compose project name the same way `backup.sh` does, confirms all three backup files for that timestamp exist before touching anything, prompts for confirmation (`--force` skips the prompt — used by the automated drill below), stops the stack, removes and recreates each volume, restores the tarball into it, and starts the stack back up.
+
+### Manual restore (what the script does, step by step)
+
+Useful if you need to restore a single volume rather than all three, or want to understand exactly what's happening before running it against production data.
+
 First, capture your project name into a variable — all volume operations below use it:
 
 ```bash
@@ -116,6 +129,17 @@ Open your n8n and Baserow URLs and confirm workflows and databases are intact. C
 ```bash
 docker compose logs --tail=100
 ```
+
+## Verifying the Restore Path Actually Works
+
+A backup you've never restored is a hope, not a backup. `scripts/backup-drill.sh` proves the full cycle works: it writes a marker row into Postgres, runs a real backup, **destroys the volumes**, restores from the tarball just taken, and fails loudly if the marker row isn't back.
+
+```bash
+make backup-test
+# needs a running stack — boot one first with `make dev` or `make up`
+```
+
+The same script runs on a schedule in CI ([`.github/workflows/backup-drill.yml`](../.github/workflows/backup-drill.yml), weekly + on-demand via `workflow_dispatch`), against a throwaway stack it boots itself — so the restore path gets exercised regularly even if nobody runs it by hand. Check the Actions tab for the `Backup Drill` workflow's history.
 
 ## Transferring Backups Off-Server
 

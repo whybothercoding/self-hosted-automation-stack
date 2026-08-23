@@ -1,0 +1,46 @@
+name: Backup Drill
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # weekly
+  workflow_dispatch:
+
+# Proves the restore path actually works, not just that backup.sh runs
+# without error — see scripts/backup-drill.sh for the drill logic itself
+# (also runnable locally via `make backup-test`).
+#
+# COMPOSE_FILE layers the dev override on top of the production compose
+# file for every plain `docker compose` call in this job — including the
+# ones inside the scripts — without those scripts needing to know about CI
+# at all. This is the standard Compose CLI mechanism for that.
+env:
+  COMPOSE_FILE: docker-compose.yml:docker-compose.dev.yml
+
+jobs:
+  backup-restore-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          sed -i "s|^N8N_ENCRYPTION_KEY=.*|N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^BASEROW_SECRET_KEY=.*|BASEROW_SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+      - name: Boot the stack
+        run: docker compose up -d --wait --wait-timeout 180
+
+      - name: Run the backup/restore drill
+        run: bash scripts/backup-drill.sh
+
+      - name: Dump service status and logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
