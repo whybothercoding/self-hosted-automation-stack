@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Copy env template
         run: cp .env.example .env
@@ -24,4 +24,43 @@ jobs:
       - name: Lint shell scripts
         run: |
           sudo apt-get install -y shellcheck
-          shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh
+          shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh scripts/restore.sh scripts/backup-drill.sh scripts/wait-for-healthy.sh
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare .env
+        # .env.example ships with N8N_ENCRYPTION_KEY and BASEROW_SECRET_KEY
+        # blank — Baserow's Django backend won't boot with an empty
+        # SECRET_KEY. Generate real values the same way scripts/setup.sh
+        # does for a real deploy.
+        run: |
+          cp .env.example .env
+          sed -i "s|^N8N_ENCRYPTION_KEY=.*|N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^BASEROW_SECRET_KEY=.*|BASEROW_SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+      - name: Boot dev stack
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+      - name: Wait for healthchecks
+        run: bash scripts/wait-for-healthy.sh postgres n8n baserow
+
+      - name: Check n8n health endpoint (external, through the mapped port)
+        run: curl -sf http://localhost:5678/healthz
+
+      - name: Check Baserow health endpoint (external, through the mapped port)
+        run: curl -sf http://localhost:8080/api/_health/
+
+      - name: Dump service status and logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

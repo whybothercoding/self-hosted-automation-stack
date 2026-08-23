@@ -1,0 +1,62 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly — catches newly-disclosed CVEs in images that were already
+    # pinned and clean when they were merged.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+# Trivy scans the four pinned images for known CVEs. It does NOT scan
+# docker-compose.yml itself — Trivy has no native docker-compose misconfig
+# scanner (confirmed against its own issue tracker), so claiming IaC
+# coverage here would be inaccurate.
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: n8n
+            image: n8nio/n8n:2.35.7
+          - name: baserow
+            image: baserow/baserow:2.3.3
+          - name: postgres
+            image: postgres:15.19-alpine3.24
+          - name: caddy
+            image: caddy:2.11.4-alpine
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned to a commit SHA, not a version tag. aquasecurity/trivy-action
+      # had 75 of 76 tags force-pushed with malware in March 2026 — tags are
+      # mutable, SHAs aren't. Re-resolve this SHA from a current release
+      # before bumping, never trust a floating tag for a third-party action.
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+        continue-on-error: true # visibility, not a merge gate — some CVEs are unfixable from this repo
+
+      # Guarded on the SARIF file actually existing: the scan step above can
+      # fail (bad tag, registry hiccup, transient error) without producing
+      # output, and continue-on-error would otherwise let this step crash
+      # the whole job on a bare "Path does not exist".
+      - name: Upload SARIF to GitHub code scanning
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy-results.sarif
+          category: "trivy-${{ matrix.name }}"

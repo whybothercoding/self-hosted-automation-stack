@@ -2,37 +2,42 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Validate](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/validate.yml/badge.svg)](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/validate.yml)
+[![Security Scan](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/security.yml/badge.svg)](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/security.yml)
+[![Backup Drill](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/backup-drill.yml/badge.svg)](https://github.com/whybothercoding/self-hosted-automation-stack/actions/workflows/backup-drill.yml)
 
 A production-ready Docker Compose stack running **n8n**, **Baserow**, and **PostgreSQL** behind **Caddy** with automatic HTTPS. Clone, configure, and deploy a self-hosted automation suite on any VPS in minutes — no manual SSL certificate management, no external dependencies.
 
+Every push boots the stack for real and checks the health endpoints (not just YAML syntax), the four pinned images are scanned weekly for CVEs, and the backup/restore path is proven weekly by actually destroying a volume, restoring it, and verifying the data survived. See [Security & Reliability](#security--reliability) below.
+
 ## Architecture
 
-```
-                 ┌──────────────────────────────────────────────────┐
-                 │                VPS (Docker host)                  │
-                 │                                                  │
-  Internet       │  ┌─────────┐        proxy-network               │
- ──:80/:443 ────►│  │  Caddy  │──► n8n (:5678)                     │
-                 │  │  (TLS)  │└──► Baserow (:80)                   │
-                 │  └─────────┘         │          │                │
-                 │                      │          │ backend-network │
-                 │                      ▼          ▼                │
-                 │                   ┌──────────────────┐           │
-                 │                   │    PostgreSQL     │           │
-                 │                   └──────────────────┘           │
-                 └──────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    Internet(["Internet"]) -->|":80 / :443"| Caddy["Caddy<br/>(TLS termination)"]
+
+    subgraph proxy["proxy-network"]
+        Caddy -->|reverse_proxy| n8n["n8n<br/>:5678"]
+        Caddy -->|reverse_proxy| Baserow["Baserow<br/>:80"]
+    end
+
+    subgraph backend["backend-network"]
+        n8n --> Postgres[("PostgreSQL")]
+        Baserow --> Postgres
+    end
 ```
 
-Caddy terminates TLS and proxies to n8n and Baserow over `proxy-network`. Neither Caddy nor the internet can reach PostgreSQL directly — it is only reachable from n8n and Baserow via `backend-network`.
+Caddy terminates TLS and proxies to n8n and Baserow over `proxy-network`. Neither Caddy nor the internet can reach PostgreSQL directly — it is only reachable from n8n and Baserow via `backend-network`. See [ADR-0003](docs/adr/0003-two-network-topology.md) for the reasoning.
 
 ## Services
 
-| Service    | Image                     | Purpose                             | Default URL                      |
-|------------|---------------------------|-------------------------------------|----------------------------------|
-| n8n        | `n8nio/n8n:latest`        | Workflow automation                 | `https://n8n.yourdomain.com`     |
-| Baserow    | `baserow/baserow:latest`  | No-code database / spreadsheet UI  | `https://baserow.yourdomain.com` |
-| PostgreSQL | `postgres:15-alpine`      | Shared database backend             | Internal only                    |
-| Caddy      | `caddy:2-alpine`          | Reverse proxy + automatic TLS       | Handles 80/443                   |
+| Service    | Image                            | Purpose                            | Default URL                      |
+|------------|-----------------------------------|-------------------------------------|-----------------------------------|
+| n8n        | `n8nio/n8n:2.35.7`                | Workflow automation                 | `https://n8n.yourdomain.com`     |
+| Baserow    | `baserow/baserow:2.3.3`           | No-code database / spreadsheet UI   | `https://baserow.yourdomain.com` |
+| PostgreSQL | `postgres:15.19-alpine3.24`       | Shared database backend             | Internal only                    |
+| Caddy      | `caddy:2.11.4-alpine`             | Reverse proxy + automatic TLS       | Handles 80/443                   |
+
+All four are version-pinned rather than `:latest` — [Dependabot](.github/dependabot.yml) opens a PR when a new release lands, so upgrades are reviewed, not silent. See [Updating Services](docs/updating-services.md).
 
 ## Prerequisites
 
@@ -70,6 +75,7 @@ make down       # Stop and remove containers
 make restart    # Restart all services
 make logs       # Follow logs for all services
 make dev        # Start in dev mode (direct ports, no Caddy)
+make test       # Boot the dev stack and verify both health endpoints respond
 ```
 
 Or with Docker Compose directly:
@@ -80,14 +86,15 @@ docker compose logs n8n --follow
 docker compose restart n8n
 ```
 
-### Backup
+### Backup & Restore
 
 ```bash
-make backup
-# or: bash scripts/backup.sh
+make backup         # Stops the stack, snapshots all volumes to ./backups/, restarts
+make restore TIMESTAMP=20260823_140000   # Restore from a specific backup
+make backup-test    # Full backup -> destroy -> restore -> verify drill (needs a running stack)
 ```
 
-Stops the stack, snapshots all volumes to `./backups/`, and restarts. See [Backup & Restore](docs/backup-and-restore.md) for restore instructions and cron automation.
+The same drill `make backup-test` runs locally runs weekly in CI — see [Backup & Restore](docs/backup-and-restore.md).
 
 ### Update
 
@@ -109,6 +116,20 @@ make dev
 
 - n8n: [http://localhost:5678](http://localhost:5678)
 - Baserow: [http://localhost:8080](http://localhost:8080)
+
+## Security & Reliability
+
+- **Network isolation** — `proxy-network` (Caddy + apps) and `backend-network` (apps + Postgres) are separate bridge networks; Postgres is unreachable from Caddy or the internet.
+- **Container hardening** — every service runs with `no-new-privileges`; Caddy, n8n, and Postgres run with all Linux capabilities dropped except the specific ones each needs (`NET_BIND_SERVICE` for Caddy's privileged ports, five ownership-related caps for Postgres's first-init step). Baserow is intentionally not capability-dropped yet — its all-in-one process supervisor's root requirements aren't confirmed safe to guess at.
+- **Resource limits & log rotation** — every service has a memory ceiling and capped, rotated JSON logs, so a runaway execution or import can't take down the whole VPS or fill the disk.
+- **HSTS + standard security headers** on both Caddy virtual hosts.
+- **Pinned images, tracked by Dependabot** — no `:latest` tags; version bumps arrive as reviewable PRs.
+- **Weekly Trivy scan** of all four pinned images for known CVEs, results in the repo's Security tab.
+- **CI actually boots the stack** — `validate.yml`'s smoke-test job runs the real dev stack and checks both health endpoints externally, not just `docker compose config`.
+- **Backup/restore is proven, not just documented** — the weekly Backup Drill workflow writes a marker row, backs up, destroys the volume, restores from the tarball, and fails if the data isn't back.
+- **Third-party GitHub Actions pinned by commit SHA**, not by tag — a direct response to the `aquasecurity/trivy-action` supply-chain compromise (March 2026), where 75 of 76 version tags were force-pushed with malware. Tags are mutable; SHAs aren't.
+
+See [docs/adr/](docs/adr/) for the reasoning behind the bigger architectural choices.
 
 ## Environment Variables
 
@@ -137,11 +158,14 @@ All variables are documented with comments in [`.env.example`](.env.example).
 
 ## Scripts
 
-| Script               | Description                                                          |
-|----------------------|----------------------------------------------------------------------|
-| `scripts/setup.sh`   | Interactive first-run: writes `.env`, pulls images, starts stack     |
-| `scripts/backup.sh`  | Stops stack, snapshots all volumes to `backups/`, restarts stack     |
-| `scripts/update.sh`  | Pulls latest images, redeploys with `--remove-orphans`, prunes old   |
+| Script                     | Description                                                          |
+|-----------------------------|----------------------------------------------------------------------|
+| `scripts/setup.sh`         | Interactive first-run: writes `.env`, pulls images, starts stack     |
+| `scripts/backup.sh`        | Stops stack, snapshots all volumes to `backups/`, restarts stack     |
+| `scripts/restore.sh`       | Restores all volumes from a timestamped backup                       |
+| `scripts/backup-drill.sh`  | Full backup → destroy → restore → verify cycle (local or CI)         |
+| `scripts/wait-for-healthy.sh` | Polls services until Docker reports them healthy; tolerates transient blips instead of failing on the first one |
+| `scripts/update.sh`        | Pulls latest images, redeploys with `--remove-orphans`, prunes old   |
 
 ## Documentation
 
@@ -150,6 +174,7 @@ All variables are documented with comments in [`.env.example`](.env.example).
 - [Backup & Restore](docs/backup-and-restore.md) — Backup volumes and restore procedures
 - [Updating Services](docs/updating-services.md) — Safely updating n8n, Baserow, and Postgres
 - [Troubleshooting](docs/troubleshooting.md) — Common issues and solutions
+- [Architecture Decision Records](docs/adr/) — Why Caddy, why a shared Postgres instance, why two networks
 
 ## License
 

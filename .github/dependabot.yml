@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Third-party GitHub Actions — keeps every workflow action current and
+  # off stale/floating tags, which is exactly the class of risk the
+  # aquasecurity/trivy-action supply-chain compromise (March 2026) exposed.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Tracks the pinned image tags in docker-compose.yml directly (GA since
+  # Feb 2025) and opens a PR when n8n/Baserow/Postgres/Caddy cut a new
+  # release.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

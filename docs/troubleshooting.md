@@ -74,14 +74,45 @@ docker compose exec postgres psql -U $POSTGRES_USER -c "ALTER USER $POSTGRES_USE
 
 Then update `.env` to match and restart: `docker compose restart n8n baserow`
 
-**Check 3: Database doesn't exist yet**
+**Check 3: Database doesn't exist**
 
-n8n and Baserow create their own databases on first startup. If they crash before the DB is created, restart them after PostgreSQL is healthy:
+`postgres-init/init-app-databases.sh` creates the `n8n` and `baserow` databases automatically — but **only** the first time Postgres initializes against an empty `postgres_data` volume. Neither app creates its own database on connect; if the database is missing, n8n/Baserow will keep crash-looping with `database "..." does not exist` no matter how many times you restart them.
+
+This happens if:
+- You're restoring/upgrading an existing volume that was created before this init script existed.
+- The volume was manually created without ever running Postgres's first-init sequence against it.
+
+Fix — create the missing database directly:
 
 ```bash
-docker compose restart n8n
-docker compose restart baserow
+docker compose exec postgres psql -U $POSTGRES_USER -c "CREATE DATABASE n8n;"
+docker compose exec postgres psql -U $POSTGRES_USER -c "CREATE DATABASE baserow;"
+docker compose restart n8n baserow
 ```
+
+(Substitute your actual `N8N_DB_NAME`/`BASEROW_DB_NAME` if you changed them from the defaults.)
+
+---
+
+## Container Won't Start After a Capability Change
+
+**Symptom:** A service that was working fine now exits immediately, and the logs mention `permission denied`, `operation not permitted`, or a failure to bind a port — after `docker-compose.yml`'s `cap_drop`/`cap_add`/`security_opt` settings changed.
+
+Every service runs with `no-new-privileges` and most run with `cap_drop: [ALL]` plus only the specific capabilities they need (see [Security & Reliability](../README.md#security--reliability) in the README, and [ADR-0003](adr/0003-two-network-topology.md) for the isolation reasoning). If a service needs a capability that isn't in its `cap_add` list, it fails at the exact operation that needs it — often only on first run against a fresh volume, not on every start.
+
+**Step 1:** Confirm the failure is capability-related, not something else:
+
+```bash
+docker compose logs <service> --tail=50
+```
+
+Look for `EPERM`, `operation not permitted`, `permission denied`, or (for Caddy specifically) a failure to bind port 80/443.
+
+**Step 2:** Temporarily comment out that service's `cap_drop`/`cap_add` block in `docker-compose.yml` and restart it. If it starts cleanly with capabilities unrestricted, you've confirmed the diagnosis — the service needs a capability that isn't currently granted.
+
+**Step 3:** Add the missing capability to that service's `cap_add:` list rather than removing `cap_drop: [ALL]` entirely — narrow the fix to what's actually needed. [Docker's capabilities reference](https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities) lists what each capability controls.
+
+**Step 4:** Restore the hardening once the fix is confirmed — don't leave a service running capability-unrestricted after debugging.
 
 ---
 
