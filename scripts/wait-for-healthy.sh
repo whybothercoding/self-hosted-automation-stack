@@ -2,25 +2,25 @@
 set -e
 
 # -------------------------------------------------------
-# wait-for-healthy.sh — Poll a service's own healthcheck command via
-# `docker compose exec` until it succeeds.
+# wait-for-healthy.sh — Poll each service directly until it responds.
 #
 # Deliberately does NOT rely on `docker compose up --wait` or `docker
 # inspect .State.Health.Status`: both depend on Docker's own HEALTHCHECK
 # state machine, which was observed getting stuck reporting "unhealthy" for
-# Baserow even while its /api/_health/ endpoint was returning 200 on every
-# single check for minutes straight, under GitHub Actions runner resource
-# contention during first-boot migrations. Running the exact same check
-# command directly and retrying until IT succeeds sidesteps Docker's health
-# bookkeeping entirely — what matters is "does the service respond right
-# now", not "what does Docker's internal state say".
+# Baserow even while it was actually up, under GitHub Actions runner
+# resource contention during first-boot migrations.
 #
-# Baserow's check execs `wget` directly (no `sh -c` wrapper), matching how
-# docker-compose.yml's own `["CMD", "wget", ...]` array-form healthcheck
-# resolves it. Confirmed via `sh -c 'wget ...'` failing with
-# "wget: not found" while the CMD-array form (no shell involved) succeeds —
-# whatever sets Baserow's PATH for its main process apparently isn't applied
-# to an ad-hoc `docker exec ... sh` session.
+# Also deliberately does NOT `docker compose exec` into n8n/Baserow to run
+# their own healthcheck command: baserow/baserow:2.3.3 has no `wget` binary
+# anywhere in $PATH at all (confirmed at the OCI runtime level, not a shell
+# quirk) — docker-compose.yml's own `wget`-based HEALTHCHECK for that
+# service has never actually been able to run. Instead this curls each
+# HTTP service directly on its host-mapped port from the caller's machine.
+#
+# PRECONDITION: the caller must already have the dev compose override
+# active (host ports 5678/8080 mapped) — e.g. via `-f docker-compose.dev.yml`
+# or `COMPOSE_FILE` including it. Both current call sites (validate.yml's
+# smoke-test, backup-drill.yml) already do this.
 #
 # Usage: ./scripts/wait-for-healthy.sh <service> [<service> ...]
 # Known services: postgres, n8n, baserow
@@ -33,8 +33,8 @@ INTERVAL="${WAIT_INTERVAL_SECS:-10}"
 run_check() {
   case "$1" in
     postgres) docker compose exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER"' ;;
-    n8n)      docker compose exec -T n8n sh -c 'wget -qO- http://localhost:5678/healthz' ;;
-    baserow)  docker compose exec -T baserow wget -qO- http://localhost/api/_health/ ;;
+    n8n)      curl -sf http://localhost:5678/healthz ;;
+    baserow)  curl -sf http://localhost:8080/api/_health/ ;;
     *)
       echo "Unknown service: $1 (known: postgres, n8n, baserow)" >&2
       return 2
@@ -47,7 +47,7 @@ for service in "$@"; do
   ok=""
   for i in $(seq 1 "$ATTEMPTS"); do
     # if/else around the assignment (not `out=$(...) ; rc=$?`) so a nonzero
-    # exit from the exec doesn't trip `set -e` on the assignment itself.
+    # exit doesn't trip `set -e` on the assignment itself.
     if out=$(run_check "$service" 2>&1); then
       rc=0
     else
@@ -58,9 +58,7 @@ for service in "$@"; do
       ok="yes"
       break
     fi
-    # Print what actually failed — swallowing this is exactly what turned
-    # earlier failures into multiple rounds of guessing instead of one.
-    echo "  [$i/$ATTEMPTS] $service not ready (exec exit $rc): $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-300)"
+    echo "  [$i/$ATTEMPTS] $service not ready (exit $rc): $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-300)"
     sleep "$INTERVAL"
   done
   if [ -z "$ok" ]; then
