@@ -29,7 +29,7 @@ jobs:
           - name: baserow
             image: baserow/baserow:2.3.3
           - name: postgres
-            image: postgres:15.15-alpine3.24
+            image: postgres:15.19-alpine3.24
           - name: caddy
             image: caddy:2.11.4-alpine
 
@@ -50,7 +50,12 @@ jobs:
           ignore-unfixed: true
         continue-on-error: true # visibility, not a merge gate — some CVEs are unfixable from this repo
 
+      # Guarded on the SARIF file actually existing: the scan step above can
+      # fail (bad tag, registry hiccup, transient error) without producing
+      # output, and continue-on-error would otherwise let this step crash
+      # the whole job on a bare "Path does not exist".
       - name: Upload SARIF to GitHub code scanning
+        if: always() && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
         with:
           sarif_file: trivy-results.sarif

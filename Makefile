@@ -56,7 +56,7 @@ backup-test:
 	bash scripts/backup-drill.sh
 
 security-scan:
-	@for img in n8nio/n8n:2.35.7 baserow/baserow:2.3.3 postgres:15.15-alpine3.24 caddy:2.11.4-alpine; do \
+	@for img in n8nio/n8n:2.35.7 baserow/baserow:2.3.3 postgres:15.19-alpine3.24 caddy:2.11.4-alpine; do \
 		echo "--- $$img ---"; \
 		trivy image --severity CRITICAL,HIGH --ignore-unfixed "$$img"; \
 	done
