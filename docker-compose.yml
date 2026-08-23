@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15.15-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -13,11 +13,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop/cap_add: official postgres entrypoint starts as root to fix
+    # data-directory ownership on first init, then drops via gosu. These five
+    # caps are the documented minimal set — verify a fresh-volume init still
+    # works cleanly before trusting this on a real deploy.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - backend-network
 
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.35.7
     restart: unless-stopped
     depends_on:
       postgres:
@@ -44,12 +67,27 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    # Safe to fully drop: the official image already runs as the
+    # unprivileged `node` user and never binds a privileged port.
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - proxy-network
       - backend-network
 
   baserow:
-    image: baserow/baserow:latest
+    image: baserow/baserow:2.3.3
     restart: unless-stopped
     depends_on:
       postgres:
@@ -59,12 +97,33 @@ services:
       SECRET_KEY: ${BASEROW_SECRET_KEY}
     volumes:
       - baserow_data:/baserow/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/api/_health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+    # No cap_drop here yet: Baserow's all-in-one image runs nginx +
+    # gunicorn/daphne + celery via an internal process supervisor whose root
+    # requirements aren't confirmed. Drop capabilities in a follow-up pass
+    # once this base hardening is proven in CI, not blindly in this one.
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - proxy-network
       - backend-network
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.4-alpine
     restart: unless-stopped
     ports:
       - "80:80"
@@ -78,6 +137,22 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    security_opt:
+      - no-new-privileges:true
+    # NET_BIND_SERVICE is required to bind ports 80/443 as non-root.
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - proxy-network
 
