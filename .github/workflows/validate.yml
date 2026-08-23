@@ -24,7 +24,7 @@ jobs:
       - name: Lint shell scripts
         run: |
           sudo apt-get install -y shellcheck
-          shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh scripts/restore.sh scripts/backup-drill.sh
+          shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh scripts/restore.sh scripts/backup-drill.sh scripts/wait-for-healthy.sh
 
   smoke-test:
     runs-on: ubuntu-latest
@@ -43,8 +43,11 @@ jobs:
           sed -i "s|^N8N_ENCRYPTION_KEY=.*|N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)|" .env
           sed -i "s|^BASEROW_SECRET_KEY=.*|BASEROW_SECRET_KEY=$(openssl rand -hex 32)|" .env
 
-      - name: Boot dev stack and wait for healthchecks
-        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait --wait-timeout 320
+      - name: Boot dev stack
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+      - name: Wait for healthchecks
+        run: bash scripts/wait-for-healthy.sh postgres n8n baserow
 
       - name: Check n8n health endpoint (external, through the mapped port)
         run: curl -sf http://localhost:5678/healthz

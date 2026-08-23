@@ -49,7 +49,8 @@ Internet → Caddy (80/443) ──proxy-network──► n8n (5678)
 - **`docker-compose.dev.yml`** — override that ports n8n and Baserow directly and puts Caddy behind a `production` profile (so it doesn't start)
 - **`postgres-init/init-app-databases.sh`** — mounted into Postgres's `docker-entrypoint-initdb.d/`; creates the `n8n` and `baserow` databases on first init of an empty volume. See the Critical Constraints note below — this doesn't run again against an already-initialized volume.
 - **`Caddyfile`** — reads domain/subdomain from env vars at runtime via `{$VAR}` syntax; security headers include HSTS (`max-age=31536000; includeSubDomains`), X-Frame-Options, X-Content-Type-Options, Referrer-Policy; gzip on both virtual hosts
-- **`.github/workflows/validate.yml`** — CI runs on every push to main and every PR: validates both compose files, shellchecks all scripts in `scripts/`, then actually boots the dev stack (`--wait`) and curls both health endpoints externally — this is real runtime verification, not just YAML syntax checking
+- **`.github/workflows/validate.yml`** — CI runs on every push to main and every PR: validates both compose files, shellchecks all scripts in `scripts/`, then actually boots the dev stack and curls both health endpoints externally — this is real runtime verification, not just YAML syntax checking
+- **Don't use `docker compose up --wait`** for boot verification — it fails permanently on the *first* "unhealthy" transition, even if the container recovers seconds later. Baserow's first-boot migration + template sync briefly reports unhealthy under CI resource contention, then starts passing every subsequent check — `--wait` killed the job anyway (discovered 2026-08-23). Use `scripts/wait-for-healthy.sh <service...>` instead: it polls `docker inspect` directly and only fails on a genuine timeout with nothing ever reporting healthy. Used by `validate.yml`, `backup-drill.yml`, `scripts/backup-drill.sh`, and `make test`.
 - **`.github/workflows/security.yml`** — weekly + on-push Trivy CVE scan of the four pinned images (not the compose file — Trivy has no native docker-compose misconfig scanner), results land in the repo's Security tab. Non-blocking (`continue-on-error`).
 - **`.github/workflows/backup-drill.yml`** — weekly + on-demand: writes a marker row, backs up, destroys the volumes, restores, and fails if the marker isn't back. Proves the restore path works instead of just documenting it. Logic lives in `scripts/backup-drill.sh` (also runnable locally via `make backup-test`), shared between CI and local use so they can't drift apart.
 - **`.github/dependabot.yml`** — tracks the pinned image tags in `docker-compose.yml` (`docker` ecosystem) and third-party Action versions (`github-actions` ecosystem) weekly.
@@ -70,7 +71,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
 rm .env
 
 # Lint shell scripts
-shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh scripts/restore.sh scripts/backup-drill.sh
+shellcheck --severity=error scripts/setup.sh scripts/backup.sh scripts/update.sh scripts/restore.sh scripts/backup-drill.sh scripts/wait-for-healthy.sh
 ```
 
 To actually verify the stack boots (not just that the YAML is valid), run `make test` — needs a local Docker daemon. If one isn't available in your environment, push to a branch and let the `validate.yml` smoke-test job do it; don't claim runtime behavior is verified without one or the other actually running.

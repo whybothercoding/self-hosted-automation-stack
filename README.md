@@ -164,6 +164,7 @@ All variables are documented with comments in [`.env.example`](.env.example).
 | `scripts/backup.sh`        | Stops stack, snapshots all volumes to `backups/`, restarts stack     |
 | `scripts/restore.sh`       | Restores all volumes from a timestamped backup                       |
 | `scripts/backup-drill.sh`  | Full backup → destroy → restore → verify cycle (local or CI)         |
+| `scripts/wait-for-healthy.sh` | Polls services until Docker reports them healthy; tolerates transient blips instead of failing on the first one |
 | `scripts/update.sh`        | Pulls latest images, redeploys with `--remove-orphans`, prunes old   |
 
 ## Documentation

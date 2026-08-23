@@ -55,7 +55,7 @@ echo "Restoring from backup timestamped: $TIMESTAMP"
 bash "$SCRIPT_DIR/restore.sh" "$TIMESTAMP" --force
 
 echo "Waiting for the restored stack to become healthy..."
-docker compose up -d --wait --wait-timeout 320
+bash "$SCRIPT_DIR/wait-for-healthy.sh" postgres n8n baserow
 
 RESULT=$(docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -c \
   "SELECT 1 FROM backup_drill WHERE marker = '${MARKER}';" | tr -d '[:space:]')
