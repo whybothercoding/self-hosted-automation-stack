@@ -15,3 +15,5 @@ certs/
 
 # Internal planning files
 docs/superpowers/
+CLAUDE.md
+AGENTS.md
