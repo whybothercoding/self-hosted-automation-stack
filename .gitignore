@@ -13,7 +13,5 @@ certs/
 # macOS
 .DS_Store
 
-# Internal planning files
-docs/superpowers/
 CLAUDE.md
 AGENTS.md
