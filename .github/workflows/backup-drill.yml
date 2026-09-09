@@ -5,6 +5,13 @@ on:
     - cron: "0 7 * * 1" # weekly
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 # Proves the restore path actually works, not just that backup.sh runs
 # without error — see scripts/backup-drill.sh for the drill logic itself
 # (also runnable locally via `make backup-test`).
