@@ -7,6 +7,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   # Tracks the pinned image tags in docker-compose.yml directly (GA since
   # Feb 2025) and opens a PR when n8n/Baserow/Postgres/Caddy cut a new
@@ -15,3 +18,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      docker:
+        patterns: ["*"]
