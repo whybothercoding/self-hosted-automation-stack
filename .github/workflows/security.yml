@@ -19,7 +19,28 @@ concurrency:
 # scanner (confirmed against its own issue tracker), so claiming IaC
 # coverage here would be inaccurate.
 jobs:
+  # Scans whatever docker-compose.yml pins. A hardcoded copy of the tags here
+  # drifted from the compose file, so a Dependabot image bump went unscanned.
+  images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: List pinned images
+        id: matrix
+        run: |
+          cp .env.example .env
+          matrix=$(docker compose config --images 2>/dev/null | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0)) | map({image: ., name: (split("/") | last | split(":") | first)})')
+          echo "$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   trivy:
+    needs: images
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,15 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: n8n
-            image: n8nio/n8n:2.35.7
-          - name: baserow
-            image: baserow/baserow:2.3.3
-          - name: postgres
-            image: postgres:15.19-alpine3.24
-          - name: caddy
-            image: caddy:2.11.4-alpine
+        include: ${{ fromJSON(needs.images.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
