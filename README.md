@@ -32,10 +32,10 @@ Caddy terminates TLS and proxies to n8n and Baserow over `proxy-network`. Neithe
 
 | Service    | Image                            | Purpose                            | Default URL                      |
 |------------|-----------------------------------|-------------------------------------|-----------------------------------|
-| n8n        | `n8nio/n8n:2.35.7`                | Workflow automation                 | `https://n8n.yourdomain.com`     |
-| Baserow    | `baserow/baserow:2.3.3`           | No-code database / spreadsheet UI   | `https://baserow.yourdomain.com` |
+| n8n        | `n8nio/n8n:2.44.4`                | Workflow automation                 | `https://n8n.yourdomain.com`     |
+| Baserow    | `baserow/baserow:2.4.1`           | No-code database / spreadsheet UI   | `https://baserow.yourdomain.com` |
 | PostgreSQL | `postgres:15.19-alpine3.24`       | Shared database backend             | Internal only                    |
-| Caddy      | `caddy:2.11.4-alpine`             | Reverse proxy + automatic TLS       | Handles 80/443                   |
+| Caddy      | `caddy:2.11.7-alpine`             | Reverse proxy + automatic TLS       | Handles 80/443                   |
 
 All four are version-pinned rather than `:latest` — [Dependabot](.github/dependabot.yml) opens a PR when a new release lands, so upgrades are reviewed, not silent. See [Updating Services](docs/updating-services.md).
 
