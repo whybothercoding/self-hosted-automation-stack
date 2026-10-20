@@ -11,7 +11,7 @@ set -e
 # resource contention during first-boot migrations.
 #
 # Also deliberately does NOT `docker compose exec` into n8n/Baserow to run
-# their own healthcheck command: baserow/baserow:2.3.3 has no `wget` binary
+# their own healthcheck command: baserow/baserow (checked on 2.3.3; re-check after a bump) has no `wget` binary
 # anywhere in $PATH at all (confirmed at the OCI runtime level, not a shell
 # quirk) — docker-compose.yml's own `wget`-based HEALTHCHECK for that
 # service has never actually been able to run. Instead this curls each
