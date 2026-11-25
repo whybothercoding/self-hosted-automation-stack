@@ -8,6 +8,12 @@ services:
   baserow:
     ports:
       - "8080:80"
+    environment:
+      # Baserow routes any request whose Host differs from the public URL to
+      # its published-sites handler (404 "Site not found"). The dev stack is
+      # reached as localhost:8080, so the prod https:// value would break
+      # /api/_health/ for wait-for-healthy.sh and every direct-port check.
+      BASEROW_PUBLIC_URL: http://localhost:8080
 
   caddy:
     profiles:
