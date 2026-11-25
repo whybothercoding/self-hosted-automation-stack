@@ -37,7 +37,7 @@ Caddy terminates TLS and proxies to n8n and Baserow over `proxy-network`. Neithe
 | PostgreSQL | `postgres:15.19-alpine3.24`       | Shared database backend             | Internal only                    |
 | Caddy      | `caddy:2.11.7-alpine`             | Reverse proxy + automatic TLS       | Handles 80/443                   |
 
-All four are version-pinned rather than `:latest` — [Dependabot](.github/dependabot.yml) opens a PR when a new release lands, so upgrades are reviewed, not silent. See [Updating Services](docs/updating-services.md).
+All four are version-pinned rather than `:latest` — bumping one is a deliberate edit to `docker-compose.yml`, so upgrades are reviewed, not silent. See [Updating Services](docs/updating-services.md).
 
 ## Prerequisites
 
@@ -123,7 +123,7 @@ make dev
 - **Container hardening** — every service runs with `no-new-privileges`; Caddy, n8n, and Postgres run with all Linux capabilities dropped except the specific ones each needs (`NET_BIND_SERVICE` for Caddy's privileged ports, five ownership-related caps for Postgres's first-init step). Baserow is intentionally not capability-dropped yet — its all-in-one process supervisor's root requirements aren't confirmed safe to guess at.
 - **Resource limits & log rotation** — every service has a memory ceiling and capped, rotated JSON logs, so a runaway execution or import can't take down the whole VPS or fill the disk.
 - **HSTS + standard security headers** on both Caddy virtual hosts.
-- **Pinned images, tracked by Dependabot** — no `:latest` tags; version bumps arrive as reviewable PRs.
+- **Pinned images** — no `:latest` tags; version bumps are deliberate, reviewable edits.
 - **Weekly Trivy scan** of all four pinned images for known CVEs, results in the repo's Security tab.
 - **CI actually boots the stack** — `validate.yml`'s smoke-test job runs the real dev stack and checks both health endpoints externally, not just `docker compose config`.
 - **Backup/restore is proven, not just documented** — the weekly Backup Drill workflow writes a marker row, backs up, destroys the volume, restores from the tarball, and fails if the data isn't back.
