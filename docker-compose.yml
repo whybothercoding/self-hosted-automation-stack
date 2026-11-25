@@ -100,6 +100,16 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${BASEROW_DB_NAME}
       SECRET_KEY: ${BASEROW_SECRET_KEY}
+      # Used in links inside emails; defaults to http://localhost otherwise.
+      BASEROW_PUBLIC_URL: https://${BASEROW_SUBDOMAIN}.${DOMAIN}
+      # Outbound SMTP only (no IMAP). Without EMAIL_SMTP, Baserow sends nothing.
+      EMAIL_SMTP: "True"
+      EMAIL_SMTP_HOST: ${BASEROW_SMTP_HOST}
+      EMAIL_SMTP_PORT: ${BASEROW_SMTP_PORT}
+      EMAIL_SMTP_USER: ${BASEROW_SMTP_USER}
+      EMAIL_SMTP_PASSWORD: ${BASEROW_SMTP_PASS}
+      EMAIL_SMTP_USE_TLS: "True"
+      FROM_EMAIL: ${BASEROW_FROM_EMAIL}
     volumes:
       - baserow_data:/baserow/data
     healthcheck:

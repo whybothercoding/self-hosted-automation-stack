@@ -145,6 +145,11 @@ See [docs/adr/](docs/adr/) for the reasoning behind the bigger architectural cho
 | `BASEROW_DB_NAME`    | Database name for Baserow                             | `baserow`                     |
 | `N8N_ENCRYPTION_KEY` | Encrypts n8n credentials — never change after set     | *(openssl rand -hex 32)*      |
 | `BASEROW_SECRET_KEY` | Django secret key for Baserow                         | *(openssl rand -hex 32)*      |
+| `BASEROW_SMTP_HOST`  | Baserow outbound SMTP hostname                        | `smtp.example.com`            |
+| `BASEROW_SMTP_PORT`  | Baserow SMTP port (STARTTLS)                          | `587`                         |
+| `BASEROW_SMTP_USER`  | Baserow SMTP username                                 | `user@example.com`            |
+| `BASEROW_SMTP_PASS`  | Baserow SMTP password                                 | *(your smtp password)*        |
+| `BASEROW_FROM_EMAIL` | Sender address for Baserow emails                     | `user@example.com`            |
 | `GENERIC_TIMEZONE`   | Timezone for n8n scheduling                           | `Europe/Athens`               |
 | `LETSENCRYPT_EMAIL`  | Email for Let's Encrypt registration                  | `you@example.com`             |
 | `N8N_EMAIL_MODE`     | Email sending mode: `smtp` or empty                   | `smtp`                        |
